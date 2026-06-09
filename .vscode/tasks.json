@@ -2,6 +2,16 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "prepare:launch-client",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"compile:client",
+				"bundle:server:production"
+			],
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
 			"label": "compile",
 			"dependsOn": [
 				"compile:client",
@@ -12,7 +22,8 @@
 		{
 			"label": "compile:client",
 			"type": "npm",
-			"script": "compile:client",
+			"script": "compile",
+			"path": "client",
 			"group": "build",
 			"presentation": {
 				"panel": "dedicated",
@@ -25,7 +36,8 @@
 		{
 			"label": "compile:server",
 			"type": "npm",
-			"script": "compile:server",
+			"script": "compile",
+			"path": "server",
 			"group": "build",
 			"presentation": {
 				"panel": "dedicated",
@@ -50,7 +62,8 @@
 		{
 			"label": "watch:client",
 			"type": "npm",
-			"script": "watch:client",
+			"script": "watch",
+			"path": "client",
 			"isBackground": true,
 			"group": "build",
 			"presentation": {
@@ -64,7 +77,8 @@
 		{
 			"label": "watch:server",
 			"type": "npm",
-			"script": "watch:server",
+			"script": "watch",
+			"path": "server",
 			"isBackground": true,
 			"group": "build",
 			"presentation": {
@@ -74,6 +88,84 @@
 			"problemMatcher": [
 				"$tsc-watch"
 			]
+		},
+		{
+			"label": "bundle:server:production",
+			"type": "npm",
+			"script": "webpack-pro",
+			"path": "server",
+			"group": "build",
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "always"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "deploy:extension-assets",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -euo pipefail; EXT_DIR=small.php-ci-0.4.2; TARGETS=\"$HOME/.vscode-server/extensions/$EXT_DIR $HOME/.vscode/extensions/$EXT_DIR\"; copied=0; for target in $TARGETS; do if [ -d \"$target\" ]; then mkdir -p \"$target/server\" \"$target/out\"; cp -f client/server/server.js \"$target/server/server.js\"; if [ -f client/server/server.js.map ]; then cp -f client/server/server.js.map \"$target/server/server.js.map\"; fi; cp -Rf client/out/. \"$target/out/\"; echo \"Deployed artifacts to $target\"; copied=1; fi; done; if [ \"$copied\" -eq 0 ]; then echo \"No installed extension directory found for $EXT_DIR under ~/.vscode-server/extensions or ~/.vscode/extensions. Skipping deploy step.\"; fi"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"group": "build",
+			"presentation": {
+				"panel": "shared",
+				"reveal": "always"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "build:release",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"bundle:server:production",
+				"compile:client",
+				"deploy:extension-assets",
+				"smoke:server:runtime",
+				"smoke:server:lsp-ipc"
+			],
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "smoke:server:lsp-ipc",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/smoke-lsp-ipc.js"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"group": "build",
+			"presentation": {
+				"panel": "shared",
+				"reveal": "always"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "smoke:server:runtime",
+			"type": "shell",
+			"command": "bash",
+			"args": [
+				"-lc",
+				"set -euo pipefail; tmp=$(mktemp); set +e; node client/server/server.js --node-ipc >\"$tmp\" 2>&1; code=$?; set -e; if [ \"$code\" -eq 0 ]; then echo \"Server runtime smoke check passed (ipc bootstrap).\"; rm -f \"$tmp\"; exit 0; fi; echo \"Server runtime smoke check failed (exit=$code).\"; tail -n 80 \"$tmp\"; rm -f \"$tmp\"; exit $code"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"group": "build",
+			"presentation": {
+				"panel": "shared",
+				"reveal": "always"
+			},
+			"problemMatcher": []
 		}
 	]
 }

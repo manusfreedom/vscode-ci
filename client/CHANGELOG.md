@@ -1,4 +1,10 @@
 # Change Log
+## 1.1.0 (2026/06/09)
+* Major: Expanded Go to Definition support for CI loader aliases, inheritance, mixed-case library names, and nested call chains.
+* Major: Hardened startup and parser behavior to avoid null settings crashes and stale alias resolution.
+* Note: The project now includes a `.devcontainer` setup for consistent local development.
+* Note: This release's implementation work was primarily completed by AI and reviewed/supervised by a human.
+
 ## 1.0.0 (2023/5/23)
 * Fix: Can deal `function () use ($id) {}`.
 * Archived.

@@ -25,6 +25,14 @@ export class parse{
         view: /->view\(\s*(["'])(.*?)\1/g,
     };
 
+    private static parseClassSignature(signature: string): { name: string; parentName?: string } {
+        const match = signature.trim().match(/^([a-zA-Z_][a-zA-Z0-9_]*)(?:\s+extends\s+([a-zA-Z_][a-zA-Z0-9_]*))?/i);
+        if (!match) {
+            return { name: signature.trim().split(' ').shift() || '' };
+        }
+        return { name: match[1], parentName: match[2] };
+    }
+
     static parseFile(path:string):c.api_parse{
         let content='';
         try {
@@ -104,8 +112,10 @@ export class parse{
                 continue;
             let line = arr.length;//has poped
             let character = arr.pop().length;
+            const classInfo = this.parseClassSignature(match[1]);
             classData = {
-                name: match[1],
+                name: classInfo.name,
+                parentName: classInfo.parentName,
                 location: {
                     uri: uri,
                     range: {
@@ -169,8 +179,10 @@ export class parse{
                 continue;
             let line = arr.length;//has poped
             let character = arr.pop().length;
+            const classInfo = this.parseClassSignature(match[1]);
             classData = {
-                name: match[1].trim().split(' ').shift(),
+                name: classInfo.name,
+                parentName: classInfo.parentName,
                 location: {
                     uri: uri,
                     range: {
@@ -301,9 +313,10 @@ export class parse{
 
     static cleanBracket(words: string, type: wordsType = wordsType.full): string{
         words=words.replace(/\s/g,'')
-        var $this=words.indexOf('$this');
+        // Use the closest chain before the cursor, not the first one on the line.
+        var $this=words.lastIndexOf('$this');
         if ($this < 0) {
-            $this = words.indexOf('$CI');
+            $this = words.lastIndexOf('$CI');
             if ($this < 0) return '';
         }
         words=words.substr($this);
@@ -316,8 +329,9 @@ export class parse{
                 do {
                     var end=words.indexOf(')->',tindex);
                     if (end<0){
-                        //endwith '(', it is a method
-                        if (index==j-1&&type==wordsType.half){
+                        // For half/full parsing, keep the outer method call and don't dive into
+                        // nested "$this->..." expressions inside arguments.
+                        if (type!=wordsType.signature){
                             return total+'()';
                         }else if (type==wordsType.signature){
                             var p=this.cleanParam(words.substr(tindex+1));

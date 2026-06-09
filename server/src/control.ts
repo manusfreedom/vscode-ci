@@ -5,7 +5,6 @@ import {
 } from 'vscode-languageserver';
 import * as fs from 'fs';
 import * as parse from './parse';
-import { isNumber } from 'util';
 import { URI } from 'vscode-uri'
 export interface fun {
     param: ParameterInformation[];
@@ -23,7 +22,8 @@ export interface class_cache {
 }
 export interface class_data {
     location: Location,
-    name: string
+    name: string,
+    parentName?: string
 }
 //also variable data
 export interface const_data {
@@ -63,7 +63,8 @@ export class loader {
     //root of the workspace
     static root: URI = null;
     static re = {
-        loader: /\$this->load->(.+?)\((.+?)\);/g,
+        // Support both "$this->load->..." and "$this->CI->load->..." styles.
+        loader: /\$this->(?:CI->)?load->(.+?)\((.+?)\);/g,
         isStatic: /([a-zA-Z0-9_]*)::([a-zA-Z0-9_\$]*)$/
     };
     logger = null;
@@ -83,6 +84,8 @@ export class loader {
     display = new Map<string, string>();
     //use for refresh cache when file changed
     cached_info = new Map<string, cache_info>();
+    //class inheritance map: child class -> parent class
+    classParents = new Map<string, string>();
     constructor() {
         this.cache.system.set('input', null);
         this.cache.system.set('db', null);
@@ -263,6 +266,12 @@ export class loader {
     }
 
     definition(textDocumentPosition: TextDocumentPositionParams, text: string): Location {
+        const extendsRef = this.findExtendsClassAtPosition(textDocumentPosition, text);
+        if (extendsRef) {
+            const extendsLocation = this.resolveClassLocationByName(extendsRef);
+            if (extendsLocation) return extendsLocation;
+        }
+
         let words = parse.parse.getWords(text, textDocumentPosition.position, parse.wordsType.half);
         let isStatic = loader.re.isStatic.exec(words);
         if (isStatic) {
@@ -290,6 +299,11 @@ export class loader {
         var claName = arr[1];
         if (arr.length == 2) {
             let data = this.getClassInfo(claName);
+            if (!data) {
+                // Keep aliases in sync with unsaved edits before giving up.
+                this.parseLoader(text);
+                data = this.getClassInfo(claName);
+            }
             try {
                 if (data && data.data.classData) {
                     return data.data.classData.location;
@@ -314,13 +328,19 @@ export class loader {
             }
         } else if (arr.length == 3) {
             let data = this.getClassInfo(claName);
+            if (!data) {
+                // Keep aliases in sync with unsaved edits before giving up.
+                this.parseLoader(text);
+                data = this.getClassInfo(claName);
+            }
             if (!data) return null;
             let token = arr[2];
             if (token.endsWith('()'))
                 token = token.slice(0, -2);
             try {
                 let info = data.data.funs.get(token) || data.data.variable.get(token)
-                return info ? info.location : null;
+                if (info) return info.location;
+                return this.resolveInheritedMemberLocation(data.data, token);
             } catch (error) {
                 this.logger.log('Hello! You have found a BUG in definition! It would be very helpful if you can add a issue in github!')
                 this.logger.log('Add issue here: https://github.com/smallp/vscode-ci/issues/new')
@@ -338,6 +358,98 @@ export class loader {
             let info: fun = data.data.funs.get(method) || this.cache.system.get('CI_DB_result').funs.get(method);
             return info ? info.location : null;
         }
+        return null;
+    }
+
+    private findExtendsClassAtPosition(textDocumentPosition: TextDocumentPositionParams, text: string): string | null {
+        const lines = text.split('\n');
+        const lineText = lines[textDocumentPosition.position.line] || '';
+        const re = /\bextends\s+([a-zA-Z_][a-zA-Z0-9_]*)\b/g;
+        let match: RegExpExecArray | null;
+
+        while ((match = re.exec(lineText)) !== null) {
+            const className = match[1];
+            const classStart = match.index + match[0].indexOf(className);
+            const classEnd = classStart + className.length;
+            const ch = textDocumentPosition.position.character;
+            if (ch >= classStart && ch <= classEnd) {
+                return className;
+            }
+        }
+
+        return null;
+    }
+
+    private resolveClassLocationByName(className: string): Location | null {
+        const data = this.loadClassCacheByName(className);
+        return data && data.classData ? data.classData.location : null;
+    }
+
+    private resolveInheritedMemberLocation(classData: cache, token: string): Location | null {
+        if (!classData.classData || !classData.classData.name) {
+            return null;
+        }
+
+        const visited = new Set<string>();
+        let parentName = classData.classData.parentName || this.classParents.get(classData.classData.name);
+        while (parentName && !visited.has(parentName)) {
+            visited.add(parentName);
+            const parent = this.loadClassCacheByName(parentName);
+            if (!parent) {
+                return null;
+            }
+
+            const info = parent.funs.get(token) || parent.variable.get(token);
+            if (info) {
+                return info.location;
+            }
+
+            parentName = parent.classData?.parentName || this.classParents.get(parentName);
+        }
+
+        return null;
+    }
+
+    private loadClassCacheByName(className: string): cache | null {
+        for (const kind in this.cache) {
+            for (const item of this.cache[kind].values()) {
+                if (item && item.classData && item.classData.name === className) {
+                    return item;
+                }
+            }
+        }
+
+        if (!this.settings || !this.settings.app || !this.settings.system || !loader.root) {
+            return null;
+        }
+
+        const root = loader.root.fsPath;
+        const candidates = [
+            `${root}/${this.settings.app}/core/${className}.php`,
+            `${root}/${this.settings.app}/libraries/${className}.php`,
+            `${root}/${this.settings.app}/models/${className}.php`,
+            `${root}/${this.settings.system}/core/${className}.php`
+        ];
+
+        if (className.startsWith('CI_')) {
+            candidates.unshift(`${root}/${this.settings.system}/core/${className.slice(3)}.php`);
+        }
+
+        for (const filePath of candidates) {
+            const parsed = parse.parse.parseFile(filePath);
+            if (!parsed || !parsed.classData) {
+                continue;
+            }
+            if (parsed.classData.parentName) {
+                this.classParents.set(parsed.classData.name, parsed.classData.parentName);
+            }
+            return {
+                funs: parsed.funs,
+                classData: parsed.classData,
+                variable: parsed.variable
+            };
+        }
+
         return null;
     }
 
@@ -377,7 +489,7 @@ export class loader {
         for (index in setting){
             path=setting[index]
             this.parseFile(path,'model');
-            if (!isNumber(index)){//alise by user
+            if (isNaN(parseInt(index, 10))){//alise by user
                 this.alias.set(index,path)
                 this.display.set(index,'model')
             }else if (path.indexOf('/')>0){
@@ -416,6 +528,9 @@ export class loader {
 
     //deal with $this->load
     parseLoader(content: string) {
+        if (!this.settings || !this.settings.app || !this.settings.system) {
+            return;
+        }
         let match = null;
         while ((match = loader.re.loader.exec(content)) != null) {
             if (match[1] == 'model' || match[1] == 'library') {
@@ -444,7 +559,11 @@ export class loader {
                         alias = oriname.split('/').pop()
                     }
                 }
-                alias != name && this.alias.set(alias, name);
+                if (alias != name) {
+                    this.alias.set(alias, name);
+                }
+                // PHP property access is commonly lowercase even when loader path is mixed-case.
+                this.alias.set(alias.toLowerCase(), name);
                 this.display.set(alias, match[1]);
                 if (!this.cache[match[1]].get(name)) {
                     this.parseFile(name, match[1]);
@@ -481,6 +600,9 @@ export class loader {
 
     //parse file to collect info
     parseFile(name: string, kind: string): Map<string,fun> {
+        if (!this.settings || !this.settings.app || !this.settings.system) {
+            return new Map();
+        }
         let path = loader.root.fsPath;
         if (this.alias.has(name)) name = this.alias.get(name);
         let filePath =parse.parse.realPath(name) + '.php';
@@ -543,6 +665,9 @@ export class loader {
             //文件未找到，不缓存，直接返回
             return new Map()
         }
+        if (data.classData && data.classData.parentName) {
+            this.classParents.set(data.classData.name, data.classData.parentName);
+        }
         data.consts.forEach((v, k) => {
             this.const.set(k, v);
         });
@@ -559,7 +684,14 @@ export class loader {
 
     getClassInfo(claName: string): class_cache {
         if (this.alias.has(claName)) claName = this.alias.get(claName);
+        else if (this.alias.has(claName.toLowerCase())) claName = this.alias.get(claName.toLowerCase());
         else if (!this.cache.system.has(claName)){
+            const guessed = this.guessAliasTarget(claName);
+            if (guessed) {
+                this.alias.set(claName, guessed);
+                this.alias.set(claName.toLowerCase(), guessed);
+                claName = guessed;
+            }
             claName=parse.parse.modFirst(claName)
         }
         for (var kind in this.cache) {
@@ -573,6 +705,49 @@ export class loader {
                 } : null;
             }
         }
+
+        // Last resort: case-insensitive lookup for mixed-case class/file names.
+        const lower = claName.toLowerCase();
+        for (var kind in this.cache) {
+            for (const [key, value] of this.cache[kind]) {
+                if (key.toLowerCase() === lower) {
+                    let claData = value;
+                    if (!claData) this.parseFile(key, kind);
+                    claData = this.cache[kind].get(key);
+                    return claData ? {
+                        data: claData,
+                        kind: kind
+                    } : null;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private guessAliasTarget(claName: string): string | null {
+        if (!this.settings || !this.settings.app || !loader.root) {
+            return null;
+        }
+
+        const root = loader.root.fsPath;
+        if (claName.endsWith('_mod')) {
+            const modelName = `${claName.slice(0, -4)}_model`;
+            const modelPath = `${root}/${this.settings.app}/models/${parse.parse.realPath(modelName)}.php`;
+            if (fs.existsSync(modelPath)) {
+                return modelName;
+            }
+        }
+
+        if (claName.endsWith('_lib')) {
+            const libName = `${claName.slice(0, -4)}_lib`;
+            const appLibPath = `${root}/${this.settings.app}/libraries/${parse.parse.realPath(libName)}.php`;
+            const systemLibPath = `${root}/${this.settings.system}/libraries/${parse.parse.realPath(libName)}.php`;
+            if (fs.existsSync(appLibPath) || fs.existsSync(systemLibPath)) {
+                return libName;
+            }
+        }
+
         return null;
     }
 

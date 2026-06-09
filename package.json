@@ -4,7 +4,7 @@
 	"description": "Code completion for PHP codeigniter framework",
 	"author": "Small",
 	"license": "MIT",
-	"version": "0.2.3",
+	"version": "1.1.0",
 	"publisher": "small",
 	"repository": {
 		"type": "git",

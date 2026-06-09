@@ -7,19 +7,18 @@
 import {
 	ProposedFeatures,
 	createConnection, TextDocumentSyncKind,
-	TextDocuments, InitializeResult, TextDocumentPositionParams,
+	TextDocuments, InitializeParams, InitializeResult, TextDocumentPositionParams,
 	CompletionItem,
 	DocumentSymbolParams,SymbolInformation,SignatureHelp,Location,Hover,
 	ExecuteCommandParams,
 	DocumentLinkParams
-} from 'vscode-languageserver';
+} from 'vscode-languageserver/node';
 import {
 	TextDocument
 } from 'vscode-languageserver-textdocument';
 import { URI } from 'vscode-uri'
 import * as loader from './control';
 import { parse } from './parse';
-import { isNumber } from 'util';
 let mLoader=new loader.loader();
 // Create a connection for the server. The connection uses Node's IPC as a transport
 let connection = createConnection(ProposedFeatures.all);
@@ -32,9 +31,12 @@ let documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 documents.listen(connection);
 
 // After the server has started the client sends an initilize request. The server receives
-// in the passed params the rootPath of the workspace plus the client capabilites. 
-connection.onInitialize((params): InitializeResult => {
-	loader.loader.root = URI.parse(params.rootUri);
+// in the passed params the rootPath of the workspace plus the client capabilites.
+connection.onInitialize((params: InitializeParams): InitializeResult => {
+	const rootUri = params.rootUri ?? params.workspaceFolders?.[0]?.uri;
+	if (rootUri) {
+		loader.loader.root = URI.parse(rootUri);
+	}
 	console.log(`start small-ci on ${process.pid}`);
 	mLoader.logger=connection.console
 	return {
@@ -53,7 +55,7 @@ connection.onInitialize((params): InitializeResult => {
 				triggerCharacters:['>',':']
 			},
 			executeCommandProvider:{
-				commands:['extension.refreshModel']
+				commands:['small-ci.refreshModel']
 			}
 		}
 	}
@@ -67,7 +69,7 @@ connection.onDidChangeConfiguration((change) => {
 	for (index in mLoader.settings.library){
 		path=mLoader.settings.library[index]
 		mLoader.parseFile(path,'library');
-		if (!isNumber(index)){//alise by user
+		if (isNaN(parseInt(index, 10))){//alise by user
 			mLoader.alias.set(index,path)
 			mLoader.display.set(index,'library')
 		}else if (path.indexOf('/')>0){

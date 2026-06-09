@@ -1,12 +1,24 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import {
-	workspace as Workspace, window as Window, ExtensionContext, TextDocument, OutputChannel, WorkspaceFolder, Uri, window, StatusBarItem
+	workspace as Workspace,
+	window as Window,
+	ExtensionContext,
+	TextDocument,
+	OutputChannel,
+	WorkspaceFolder,
+	Uri,
+	window,
+	StatusBarItem,
+	commands
 } from 'vscode';
 
 import {
-	LanguageClient, LanguageClientOptions, TransportKind
-} from 'vscode-languageclient';
+	LanguageClient,
+	LanguageClientOptions,
+	ServerOptions,
+	TransportKind
+} from 'vscode-languageclient/node';
 
 let defaultClient: LanguageClient;
 let clients: Map<string, LanguageClient> = new Map();
@@ -14,6 +26,9 @@ let clients: Map<string, LanguageClient> = new Map();
 let _sortedWorkspaceFolders: string[];
 function sortedWorkspaceFolders(): string[] {
 	if (_sortedWorkspaceFolders === void 0) {
+		if (!Workspace.workspaceFolders) {
+			return [];
+		}
 		_sortedWorkspaceFolders = Workspace.workspaceFolders.map(folder => {
 			let result = folder.uri.toString();
 			if (result.charAt(result.length - 1) !== '/') {
@@ -38,7 +53,10 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
 			uri = uri + '/';
 		}
 		if (uri.startsWith(element)) {
-			return Workspace.getWorkspaceFolder(Uri.parse(element));
+			const outerFolder = Workspace.getWorkspaceFolder(Uri.parse(element));
+			if (outerFolder) {
+				return outerFolder;
+			}
 		}
 	}
 	return folder;
@@ -49,6 +67,26 @@ export function activate(context: ExtensionContext) {
 	let module = context.asAbsolutePath(path.join('server', 'server.js'));
 	// let module = context.asAbsolutePath(path.join('../server', 'out/server.js'));
 	let outputChannel: OutputChannel = Window.createOutputChannel('small-ci');
+
+	context.subscriptions.push(commands.registerCommand('extension.refreshModel', async () => {
+		if (clients.size === 0) {
+			Window.showWarningMessage('small-CI is not active yet. Open a PHP file in a CodeIgniter workspace first.');
+			return;
+		}
+
+		const requests = Array.from(clients.values()).map(client =>
+			client.sendRequest('workspace/executeCommand', {
+				command: 'small-ci.refreshModel',
+				arguments: []
+			})
+		);
+
+		try {
+			await Promise.all(requests);
+		} catch (error) {
+			Window.showErrorMessage(`small-CI refresh failed: ${error}`);
+		}
+	}));
 
 	function didOpenTextDocument(document: TextDocument): void {
 		// We are only interested in language mode text
@@ -75,7 +113,7 @@ export function activate(context: ExtensionContext) {
 
 		if (!clients.has(folder.uri.toString())) {
 			let debugOptions = { execArgv: ["--nolazy", `--inspect=${6011 + clients.size}`] };
-			let serverOptions = {
+			const serverOptions: ServerOptions = {
 				run: { module, transport: TransportKind.ipc },
 				debug: { module, transport: TransportKind.ipc, options: debugOptions }
 			};
@@ -90,27 +128,23 @@ export function activate(context: ExtensionContext) {
 				workspaceFolder: folder,
 				outputChannel: outputChannel
 			}
-			let client = new LanguageClient('small-ci', serverOptions, clientOptions, true);
+			let client = new LanguageClient('small-ci', 'small-ci', serverOptions, clientOptions);
 			let item: StatusBarItem = null
-			client.registerProposedFeatures();
+			client.onNotification('showStatus', () => {
+				if (!item) {
+					item = window.createStatusBarItem()
+				}
+				item.text = 'small-CI initing...'
+				item.show()
+			})
+			client.onNotification('hideStatus', () => {
+				if (!item) return
+				item.text = 'small-CI init done'
+				setTimeout(() => {
+					item.hide()
+				}, 5000);
+			})
 			client.start();
-			client.onReady()
-				.then(() => {
-					client.onNotification('showStatus', () => {
-						if (!item) {
-							item = window.createStatusBarItem()
-						}
-						item.text = 'small-CI initing...'
-						item.show()
-					})
-					client.onNotification('hideStatus', () => {
-						if (!item) return
-						item.text = 'small-CI init done'
-						setTimeout(() => {
-							item.hide()
-						}, 5000);
-					})
-				})
 			clients.set(folder.uri.toString(), client);
 		}
 	}

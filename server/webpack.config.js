@@ -13,6 +13,17 @@ const path = require('path');
 const config = {
     target: 'node', // vscode extensions run in a Node.js-context 📖 -> https://webpack.js.org/configuration/node/
 
+    // Upstream package `vscode-languageserver-types` ships a UMD build that
+    // triggers a webpack critical-dependency warning, but this path is expected
+    // and runtime-safe for our Node target.
+    ignoreWarnings: [
+        (warning) =>
+            typeof warning?.message === 'string' &&
+            warning.message.includes('require function is used in a way in which dependencies cannot be statically extracted') &&
+            typeof warning?.module?.resource === 'string' &&
+            warning.module.resource.includes('vscode-languageserver-types/lib/umd/main.js')
+    ],
+
     entry: './src/server.ts', // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
     output: { // the bundle is stored in the 'dist' folder (check package.json), 📖 -> https://webpack.js.org/configuration/output/
         path: path.resolve(__dirname, '../client/server'),

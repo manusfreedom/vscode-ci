@@ -4,10 +4,10 @@
     "description": "Code completion for PHP codeigniter framework",
     "author": "Small",
     "license": "MIT",
-    "version": "0.4.2",
+    "version": "1.1.0",
     "publisher": "small",
     "engines": {
-        "vscode": "^1.41.0"
+        "vscode": "^1.85.0"
     },
     "categories": [
         "Programming Languages"
@@ -25,7 +25,8 @@
         "url": "https://github.com/smallp/vscode-ci/issues"
     },
     "activationEvents": [
-        "onLanguage:php"
+        "onLanguage:php",
+        "onCommand:extension.refreshModel"
     ],
     "main": "./out/src/extension",
     "contributes": {
@@ -87,16 +88,15 @@
     },
     "scripts": {
         "compile": "tsc -p ./",
-        "watch": "tsc -w -p ./",
-        "update-vscode": "node ./node_modules/vscode/bin/install",
-        "postinstall": "node ./node_modules/vscode/bin/install"
+        "watch": "tsc -w -p ./"
     },
     "dependencies": {
-        "vscode-languageclient": "^4.1.4"
+        "vscode-languageclient": "^9.0.1"
     },
     "devDependencies": {
-        "ts-loader": "^6.2.2",
-        "typescript": "^3.5.1",
-        "vscode": "^1.1.5"
+        "@types/node": "^20.17.57",
+        "@types/vscode": "^1.85.0",
+        "ts-loader": "^9.5.2",
+        "typescript": "^5.8.3"
     }
 }
