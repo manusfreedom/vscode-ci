@@ -46,3 +46,66 @@ You can hover to get a method's documents.
 From now, the extension's all feature has been all done. Thanks for using.
 
 **Enjoy!**
+
+## Development and Release
+
+### Build extension artifacts
+
+From repository root:
+
+```bash
+yarn --cwd server run webpack-pro
+yarn --cwd client run compile
+```
+
+Or from `client/`:
+
+```bash
+yarn run build:extension
+```
+
+### Build VSIX package
+
+From repository root:
+
+```bash
+yarn --cwd client run package:vsix
+```
+
+What this does:
+
+1. Builds server and client outputs.
+2. Copies root `LICENSE` to `client/LICENSE` (`sync:license`).
+3. Runs `vsce package`.
+
+Output file:
+
+- `client/php-ci-<version>.vsix`
+
+### Node runtime requirement for packaging
+
+If your environment uses an older Node (for example Node 16), `vsce` may fail at package time.
+
+Use Node 20 explicitly for packaging:
+
+```bash
+cd client
+npx -y node@20 /usr/local/lib/node_modules/npm/bin/npm-cli.js exec --yes @vscode/vsce -- package --no-yarn
+```
+
+### Release checklist
+
+1. Update extension version in `client/package.json`.
+2. Add release notes in `client/CHANGELOG.md`.
+3. Build and package:
+
+```bash
+yarn --cwd client run package:vsix
+```
+
+4. If packaging fails on old Node, run the Node 20 packaging command above.
+5. Install the generated VSIX locally and validate:
+	- extension activates in a CodeIgniter workspace
+	- document symbols work
+	- go to definition/hover/completion still work
+6. Tag and publish after smoke verification.

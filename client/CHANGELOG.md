@@ -2,6 +2,7 @@
 ## 1.1.0 (2026/06/09)
 * Major: Expanded Go to Definition support for CI loader aliases, inheritance, mixed-case library names, and nested call chains.
 * Major: Hardened startup and parser behavior to avoid null settings crashes and stale alias resolution.
+* Fix: Prevented `textDocument/documentSymbol` failures caused by negative symbol range columns.
 * Note: The project now includes a `.devcontainer` setup for consistent local development.
 * Note: This release's implementation work was primarily completed by AI and reviewed/supervised by a human.
 

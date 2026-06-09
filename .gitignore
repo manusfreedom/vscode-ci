@@ -3,3 +3,5 @@ client/server
 node_modules
 .npm
 dist
+client/LICENSE
+client/*.vsix

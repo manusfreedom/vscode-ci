@@ -262,12 +262,12 @@ export class parse{
         while ((match = this.re.fun.exec(content)) != null){
             var lines=content.substr(0,match.index).split('\n');
             var line=lines.length-1;
-            var startC=lines.pop().length-1;
+            var startC=Math.max(0, (lines.pop() || '').length);
             res.push({
                 name:match[1],
                 Range:{
                         start:{line:line,character:startC},
-                        end:{line:line,character:startC+match[0].length-1},
+                        end:{line:line,character:startC+match[0].length},
                     }
             });
         }
