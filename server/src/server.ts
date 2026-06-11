@@ -53,9 +53,6 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 			completionProvider: {
 				resolveProvider: false,
 				triggerCharacters:['>',':']
-			},
-			executeCommandProvider:{
-				commands:['small-ci.refreshModel']
 			}
 		}
 	}

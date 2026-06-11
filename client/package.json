@@ -91,7 +91,7 @@
         "watch": "tsc -w -p ./",
         "build:extension": "yarn --cwd ../server run webpack-pro && yarn run compile",
         "sync:license": "node -e \"require('fs').copyFileSync('../LICENSE', './LICENSE')\"",
-        "package:vsix": "yarn run build:extension && yarn run sync:license && npx @vscode/vsce package"
+        "package:vsix": "yarn run build:extension && yarn run sync:license && npx -y @vscode/vsce@latest package"
     },
     "dependencies": {
         "vscode-languageclient": "^9.0.1"

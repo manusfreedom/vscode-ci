@@ -107,7 +107,7 @@
 			"command": "bash",
 			"args": [
 				"-lc",
-				"set -euo pipefail; EXT_DIR=small.php-ci-0.4.2; TARGETS=\"$HOME/.vscode-server/extensions/$EXT_DIR $HOME/.vscode/extensions/$EXT_DIR\"; copied=0; for target in $TARGETS; do if [ -d \"$target\" ]; then mkdir -p \"$target/server\" \"$target/out\"; cp -f client/server/server.js \"$target/server/server.js\"; if [ -f client/server/server.js.map ]; then cp -f client/server/server.js.map \"$target/server/server.js.map\"; fi; cp -Rf client/out/. \"$target/out/\"; echo \"Deployed artifacts to $target\"; copied=1; fi; done; if [ \"$copied\" -eq 0 ]; then echo \"No installed extension directory found for $EXT_DIR under ~/.vscode-server/extensions or ~/.vscode/extensions. Skipping deploy step.\"; fi"
+				"set -euo pipefail; EXT_DIRS=\"small.php-ci-1.1.0 small.php-ci-0.4.2\"; copied=0; for ext in $EXT_DIRS; do TARGETS=\"$HOME/.vscode-server/extensions/$ext $HOME/.vscode/extensions/$ext\"; for target in $TARGETS; do if [ -d \"$target\" ]; then mkdir -p \"$target/server\" \"$target/out\"; cp -f client/server/server.js \"$target/server/server.js\"; if [ -f client/server/server.js.map ]; then cp -f client/server/server.js.map \"$target/server/server.js.map\"; fi; cp -Rf client/out/. \"$target/out/\"; echo \"Deployed artifacts to $target\"; copied=1; fi; done; done; if [ \"$copied\" -eq 0 ]; then echo \"No installed extension directory found under ~/.vscode-server/extensions or ~/.vscode/extensions for: $EXT_DIRS. Skipping deploy step.\"; fi"
 			],
 			"options": {
 				"cwd": "${workspaceFolder}"

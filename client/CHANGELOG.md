@@ -1,4 +1,9 @@
 # Change Log
+## Unreleased
+* Fix: Avoid duplicate `small-ci.refreshModel` command registration when the extension starts more than one server in the same VS Code session.
+* Tooling: Switch VSIX packaging to latest `@vscode/vsce`.
+* Tooling: Standardize release packaging on Node 20+ (including devcontainer baseline).
+
 ## 1.1.0 (2026/06/09)
 * Major: Expanded Go to Definition support for CI loader aliases, inheritance, mixed-case library names, and nested call chains.
 * Major: Hardened startup and parser behavior to avoid null settings crashes and stale alias resolution.

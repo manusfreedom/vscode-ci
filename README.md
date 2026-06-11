@@ -37,8 +37,9 @@ yarn --cwd client run package:vsix
 Notes:
 
 - `package:vsix` builds server/client and syncs `LICENSE` from repo root into `client/LICENSE` before packaging.
-- `@vscode/vsce` currently requires a newer Node runtime than Node 16 in some environments.
-- If your default Node is old, run packaging with Node 20:
+- Packaging uses latest `@vscode/vsce` and requires Node 20+.
+- The devcontainer is configured for Node 20 (`.devcontainer/Dockerfile`).
+- If your local/default Node is older, run packaging with Node 20:
 
 ```bash
 cd client
